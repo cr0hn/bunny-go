@@ -1,6 +1,6 @@
 # bunny-go
 
-SDK de Go open source para bunny.net (Edge Storage, Stream y firma de URLs del
+SDK de Go open source (repo **público** en GitHub) para bunny.net (Edge Storage, Stream y firma de URLs del
 CDN). Módulo `github.com/cr0hn/bunny-go`, MIT. Plan, decisiones y tareas:
 `vault/plan/plan-v1.md` (entrada: `vault/INDICE.md`, Progressive Disclosure,
 notas ≤200 líneas, `/save` para lo nuevo, `vault_check.py` a 0).

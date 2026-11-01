@@ -77,16 +77,24 @@ func TestIntegrationRoundTrip(t *testing.T) {
 	if got.Title != name+"-video" || got.CollectionID != col.GUID {
 		t.Fatalf("unexpected video %+v", got)
 	}
-	// Listing filtered by OUR collection finds exactly our video.
+	// Listing filtered by OUR collection finds exactly our video. The list index
+	// is eventually consistent, so poll briefly.
 	n := 0
-	for lv, err := range c.Videos(ctx, stream.ListOptions{CollectionID: col.GUID}) {
-		if err != nil {
-			t.Fatal(err)
+	for try := 0; try < 15; try++ {
+		n = 0
+		for lv, err := range c.Videos(ctx, stream.ListOptions{CollectionID: col.GUID}) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			if lv.GUID != v.GUID {
+				t.Fatalf("foreign video %s in our collection", lv.GUID)
+			}
+			n++
 		}
-		if lv.GUID != v.GUID {
-			t.Fatalf("foreign video %s in our collection", lv.GUID)
+		if n == 1 {
+			break
 		}
-		n++
+		time.Sleep(2 * time.Second)
 	}
 	if n != 1 {
 		t.Fatalf("collection lists %d videos, want 1", n)

@@ -1,0 +1,14 @@
+GET /library/123/videos?collection=col-1&itemsPerPage=2&page=1&search=a+b
+Accesskey: key
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+
+GET /library/123/videos?collection=col-1&itemsPerPage=2&page=2&search=a+b
+Accesskey: key
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+

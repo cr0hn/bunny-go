@@ -1,0 +1,8 @@
+PUT /library/123/videos/vid
+Accesskey: key
+Content-Type: application/octet-stream
+User-Agent: bunny-go/0.1.0
+Content-Length: 5
+Transfer-Encoding: []
+
+12345

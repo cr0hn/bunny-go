@@ -1,0 +1,31 @@
+POST /library/123/videos
+Accesskey: key
+Content-Type: application/json
+User-Agent: bunny-go/0.1.0
+Content-Length: 64
+Transfer-Encoding: []
+
+{"collectionId":"col-1","thumbnailTime":1500,"title":"Intro ñ"}
+POST /library/123/videos/vid%2F1
+Accesskey: key
+Content-Type: application/json
+User-Agent: bunny-go/0.1.0
+Content-Length: 33
+Transfer-Encoding: []
+
+{"collectionId":"","title":"New"}
+DELETE /library/123/videos/vid%201
+Accesskey: key
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+
+POST /library/123/videos/fetch?collectionId=col-1
+Accesskey: key
+Content-Type: application/json
+User-Agent: bunny-go/0.1.0
+Content-Length: 69
+Transfer-Encoding: []
+
+{"headers":{"X-A":"b"},"title":"T","url":"https://example.com/v.mp4"}

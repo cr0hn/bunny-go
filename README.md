@@ -35,7 +35,7 @@ if errors.As(err, &apiErr) { fmt.Println(apiErr.StatusCode, apiErr.Message) }
 | Service | Status |
 |---|---|
 | Edge Storage (upload, download, list, stat, delete, per region) (`storage`) | available |
-| Stream (videos, collections, direct and TUS upload, embed tokens) | coming soon |
+| Stream (videos, collections, paginated iterators, direct upload, fetch, TUS headers, signed embed URLs) (`stream`) | available |
 | CDN URL signing, Stream embed/TUS signatures, webhook verification (`signing`) | available |
 
 ## Signing (`signing`, offline)

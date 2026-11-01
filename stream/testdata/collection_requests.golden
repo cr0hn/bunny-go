@@ -1,0 +1,30 @@
+POST /library/123/collections
+Accesskey: key
+Content-Type: application/json
+User-Agent: bunny-go/0.1.0
+Content-Length: 16
+Transfer-Encoding: []
+
+{"name":"Curso"}
+GET /library/123/collections/col-1
+Accesskey: key
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+
+POST /library/123/collections/col-1
+Accesskey: key
+Content-Type: application/json
+User-Agent: bunny-go/0.1.0
+Content-Length: 16
+Transfer-Encoding: []
+
+{"name":"Nuevo"}
+DELETE /library/123/collections/col-1
+Accesskey: key
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+

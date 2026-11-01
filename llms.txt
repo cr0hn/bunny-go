@@ -1,0 +1,358 @@
+# bunny-go
+
+> Unofficial Go client for bunny.net: Edge Storage, Stream (video library), and offline signing of CDN URLs, Stream embeds, TUS uploads and webhooks. Standard library only, no dependencies. Module `github.com/cr0hn/bunny-go`, version 0.1.0 (pre-1.0, API may change between minor versions). Requires Go 1.24+ (uses `iter.Seq2`).
+
+Packages: `bunny` (shared HTTP client, errors), `storage`, `stream`, `signing`. Source: https://github.com/cr0hn/bunny-go. API docs: https://pkg.go.dev/github.com/cr0hn/bunny-go
+
+## Install
+
+```sh
+go get github.com/cr0hn/bunny-go@v0.1.0
+```
+
+Imports: `github.com/cr0hn/bunny-go` (package `bunny`), `.../storage`, `.../stream`, `.../signing`.
+
+## Credentials (which key goes where)
+
+- Storage: the storage zone password (zone name + password). Not the account API key.
+- Stream API calls: the library API key. Needs the numeric library ID as a string.
+- Embed tokens: the library Token Authentication Key (not the API key).
+- Webhook verification: the library Read-Only API key.
+- CDN URL signing: the pull zone Token Authentication Key.
+
+## Package bunny (core)
+
+```go
+const Version = "0.1.0"
+const UserAgent = "bunny-go/" + Version
+const MaxErrorBody = 4096 // bytes kept in APIError.Body
+
+func NewClient(opts ...Option) *Client
+func (c *Client) Do(ctx context.Context, req Request, out any) error // decodes JSON into out when non-nil
+func (c *Client) Raw(ctx context.Context, req Request) (*http.Response, error) // caller closes Body
+
+type Option func(*Client)
+func WithAPIKey(key string) Option            // AccessKey header
+func WithBackoff(base, maxDelay time.Duration) Option // defaults 200ms, 5s
+func WithBaseURL(u string) Option
+func WithHTTPClient(h *http.Client) Option    // nil ignored; default http.DefaultClient has NO timeout
+func WithMaxRetries(n int) Option             // default 3; 0 disables
+func WithUserAgent(ua string) Option
+
+type Request struct {
+	Method        string
+	Path          string      // appended to base URL, or used as is if absolute
+	Query         url.Values
+	Header        http.Header
+	Body          io.Reader   // without GetBody it is sent once, never retried
+	GetBody       func() (io.Reader, error) // fresh body per attempt; enables retries
+	ContentLength int64
+}
+```
+
+`Client` is safe for concurrent use. Use `Do`/`Raw` for bunny.net endpoints the SDK does not wrap:
+
+```go
+c := bunny.NewClient(bunny.WithBaseURL("https://video.bunnycdn.com"), bunny.WithAPIKey("api-key"))
+var out map[string]any
+err := c.Do(ctx, bunny.Request{Method: http.MethodGet, Path: "/library/12345/videos"}, &out)
+```
+
+## Errors
+
+Any non-2xx response is returned as `*bunny.APIError`:
+
+```go
+type APIError struct {
+	StatusCode int
+	Code       string // bunny.net error key, if the body has one
+	Message    string // bunny.net message, if the body has one
+	Body       []byte // raw body, cut to MaxErrorBody
+	Truncated  bool
+}
+var ErrNotFound      // 404
+var ErrUnauthorized  // 401 and 403
+var ErrRateLimited   // 429
+```
+
+Match with `errors.Is(err, bunny.ErrNotFound)` and `errors.As(err, &apiErr)`. Context errors are returned as is (`errors.Is(err, context.DeadlineExceeded)`). Other statuses (400, 500...) have no sentinel: use `errors.As` and read `StatusCode`.
+
+```go
+var apiErr *bunny.APIError
+switch {
+case errors.Is(err, bunny.ErrNotFound):
+	// missing
+case errors.As(err, &apiErr):
+	fmt.Println(apiErr.StatusCode, apiErr.Code, apiErr.Message)
+case err != nil:
+	// transport or context error
+}
+```
+
+## Retries
+
+- Retried: idempotent methods (GET, HEAD, PUT, DELETE, OPTIONS) on network errors, 429 and 5xx, up to 3 retries after the first attempt (`WithMaxRetries`, 0 disables).
+- Backoff: exponential with jitter, 200 ms to 5 s (`WithBackoff`). `Retry-After` is honoured, capped at 60 s.
+- A request with a body is retried only if it can be replayed (`Request.GetBody` set, or a seekable storage upload body).
+- POST is never retried.
+- Stream `Upload` sends the body once and never retries it.
+
+## Configuration of service clients
+
+Each service constructor takes its own options plus `WithCoreOptions(...bunny.Option)`, which forwards to the shared `bunny.Client`.
+
+```go
+hc := &http.Client{Timeout: 30 * time.Second}
+core := storage.WithCoreOptions(bunny.WithHTTPClient(hc), bunny.WithMaxRetries(5), bunny.WithBackoff(100*time.Millisecond, 10*time.Second))
+sc := storage.New("my-zone", "password", storage.WithRegion(storage.Falkenstein), core)
+vc := stream.New("12345", "api-key", stream.WithCoreOptions(bunny.WithHTTPClient(hc)))
+```
+
+Set a timeout on the `http.Client` or a deadline on each `ctx`; the default has none.
+
+## Package storage
+
+```go
+func New(zone, password string, opts ...Option) *Client
+func WithRegion(r Region) Option
+func WithEndpoint(u string) Option // arbitrary base URL; wins over WithRegion
+func WithCoreOptions(o ...bunny.Option) Option
+
+func (c *Client) Upload(ctx context.Context, path string, body io.Reader, o UploadOptions) error
+func (c *Client) Download(ctx context.Context, path string) (io.ReadCloser, error) // caller closes; missing -> bunny.ErrNotFound
+func (c *Client) List(ctx context.Context, dir string) ([]Object, error)           // "" or "/" is the zone root
+func (c *Client) Stat(ctx context.Context, path string) (Object, error)            // lists the parent dir; missing -> bunny.ErrNotFound
+func (c *Client) Exists(ctx context.Context, path string) (bool, error)            // (false, nil) only for not found
+func (c *Client) Delete(ctx context.Context, path string) error                    // one file
+func (c *Client) DeleteDir(ctx context.Context, dir string) error                 // recursive; zone root refused
+
+type UploadOptions struct {
+	ContentType string
+	Size        int64  // body length if known; otherwise non-bytes/strings readers are sent chunked
+	SHA256      string // expected hex SHA-256 (64 hex chars); bunny.net rejects mismatch with 400
+}
+type Object struct {
+	Name        string
+	Path        string // directory holding the object, as reported by bunny.net
+	Size        int64
+	IsDirectory bool
+	LastChanged time.Time // UTC
+	DateCreated time.Time // UTC
+}
+```
+
+Paths are relative to the zone. Empty, `.` and `..` segments are rejected and each segment is percent-escaped. `Upload` creates directories as needed and streams the body; it is retried only if `body` is an `io.Seeker`. `List` returns the whole directory (no pagination).
+
+Regions (type `storage.Region`) select the endpoint; pass the region of the zone's primary storage.
+
+| Constant | Code | Region |
+|---|---|---|
+| `Falkenstein` (default) | `""` | Falkenstein / Frankfurt (`storage.bunnycdn.com`) |
+| `London` | `uk` | London |
+| `NewYork` | `ny` | New York |
+| `LosAngeles` | `la` | Los Angeles |
+| `Singapore` | `sg` | Singapore |
+| `Stockholm` | `se` | Stockholm |
+| `SaoPaulo` | `br` | Sao Paulo |
+| `Johannesburg` | `jh` | Johannesburg |
+| `Sydney` | `syd` | Sydney |
+
+`func (r Region) Endpoint() string` returns the base URL.
+
+```go
+c := storage.New("my-zone", os.Getenv("BUNNY_STORAGE_KEY"), storage.WithRegion(storage.NewYork))
+body := strings.NewReader("hello")
+err := c.Upload(ctx, "docs/hello.txt", body, storage.UploadOptions{ContentType: "text/plain", Size: int64(body.Len())})
+rc, err := c.Download(ctx, "docs/hello.txt")
+if err == nil {
+	defer rc.Close()
+	data, _ := io.ReadAll(rc)
+	_ = data
+}
+objs, err := c.List(ctx, "docs")
+ok, err := c.Exists(ctx, "docs/hello.txt")
+err = c.Delete(ctx, "docs/hello.txt")
+```
+
+## Package stream
+
+```go
+const BaseURL     = "https://video.bunnycdn.com"
+const TUSEndpoint = BaseURL + "/tusupload"
+
+func New(libraryID, apiKey string, opts ...Option) *Client
+func WithBaseURL(u string) Option // for tests
+func WithCoreOptions(o ...bunny.Option) Option
+
+// Videos
+func (c *Client) CreateVideo(ctx context.Context, title string, o CreateVideoOptions) (*Video, error)
+func (c *Client) GetVideo(ctx context.Context, videoID string) (*Video, error)
+func (c *Client) UpdateVideo(ctx context.Context, videoID string, u UpdateVideo) error
+func (c *Client) DeleteVideo(ctx context.Context, videoID string) error
+func (c *Client) ListVideos(ctx context.Context, o ListOptions) (*Page[Video], error)
+func (c *Client) Videos(ctx context.Context, o ListOptions) iter.Seq2[Video, error] // lazy pages from o.Page (default 1); stops after first error
+func (c *Client) Upload(ctx context.Context, videoID string, body io.Reader, o UploadOptions) error // sent once, never retried
+func (c *Client) Fetch(ctx context.Context, srcURL string, o FetchOptions) error // bunny.net downloads srcURL; returns no video ID
+
+// Collections
+func (c *Client) CreateCollection(ctx context.Context, name string) (*Collection, error)
+func (c *Client) GetCollection(ctx context.Context, collectionID string) (*Collection, error)
+func (c *Client) RenameCollection(ctx context.Context, collectionID, name string) error
+func (c *Client) DeleteCollection(ctx context.Context, collectionID string) error
+func (c *Client) ListCollections(ctx context.Context, o ListOptions) (*Page[Collection], error)
+func (c *Client) Collections(ctx context.Context, o ListOptions) iter.Seq2[Collection, error]
+
+// Signing helpers bound to the library
+func (c *Client) EmbedURL(videoID, tokenKey string, expires time.Time) string
+func (c *Client) SignTUS(videoID string, expires time.Time) signing.TUSUpload
+
+type CreateVideoOptions struct{ CollectionID string; ThumbnailTime int /* ms */ }
+type FetchOptions struct{ Title, CollectionID string; ThumbnailTime int; Headers map[string]string }
+type ListOptions struct {
+	Page         int    // 1-based
+	ItemsPerPage int    // API clamps to 10-1000
+	Search       string // case-insensitive substring
+	CollectionID string // videos only
+	OrderBy      string // "date" (default) or "title"
+}
+type UpdateVideo struct {
+	Title        string  // empty = unchanged
+	CollectionID *string // non-nil pointer to "" removes the video from its collection
+}
+type UploadOptions struct{ Size int64 } // set it to send Content-Length instead of chunked
+type Page[T any] struct {
+	TotalItems   int64
+	CurrentPage  int
+	ItemsPerPage int
+	Items        []T
+}
+type Collection struct {
+	LibraryID int64; GUID, Name string; VideoCount, TotalSize int64
+	PreviewVideoIDs string; PreviewImageURL []string
+}
+type Video struct {
+	LibraryID int64; GUID, Title, Description string
+	DateUploaded Time // zone-less bunny.net timestamps, read as UTC
+	Views int64; IsPublic bool; LengthSeconds int; Status VideoStatus
+	Framerate float64; Width, Height int; AvailableResolutions string
+	ThumbnailCount, EncodeProgress int; StorageSize int64; HasMP4Fallback bool
+	CollectionID, ThumbnailFileName string
+}
+type VideoStatus int // StatusCreated=0, StatusUploaded=1, StatusProcessing=2, StatusTranscoding=3,
+// StatusFinished=4, StatusError=5, StatusUploadFailed=6, StatusJitSegmenting=7, StatusJitPlaylistsCreated=8
+func (s VideoStatus) Playable() bool // finished or JIT ready
+func (s VideoStatus) String() string
+```
+
+Only commonly used `Video` fields are modelled. Video and collection IDs are GUID strings; the library ID is a string argument to `New`.
+
+```go
+c := stream.New("12345", os.Getenv("BUNNY_LIBRARY_API_KEY"))
+v, err := c.CreateVideo(ctx, "Intro", stream.CreateVideoOptions{})
+f, _ := os.Open("intro.mp4")
+defer f.Close()
+st, _ := f.Stat()
+err = c.Upload(ctx, v.GUID, f, stream.UploadOptions{Size: st.Size()})
+for v, err := range c.Videos(ctx, stream.ListOptions{Search: "intro"}) {
+	if err != nil {
+		break
+	}
+	fmt.Println(v.GUID, v.Title, v.Status.Playable())
+}
+```
+
+## Package signing (offline, no network, no client)
+
+```go
+func SignURL(rawURL, securityKey string, o Options) (string, error)   // advanced token auth, HMAC-SHA256
+func SignURLBasic(rawURL, securityKey string, expires time.Time, ip string) (string, error) // deprecated MD5; ip optional; query kept but not signed
+func EmbedToken(securityKey, videoID string, expires time.Time) string
+func EmbedURL(libraryID, videoID, securityKey string, expires time.Time) string // https://player.mediadelivery.net/embed/{lib}/{video}?token=...&expires=...
+func SignTUS(libraryID, apiKey, videoID string, expires time.Time) TUSUpload
+func VerifyWebhook(readOnlyKey string, body []byte, signature string) bool // constant time
+
+type Options struct {
+	Expires          time.Time // required
+	IP               string    // IPv6 bound at /64; enable token IP validation on the pull zone
+	Path             string    // token_path directory scope, e.g. "/videos/stream1/"; signed instead of the URL path
+	InPath           bool      // token in the path (/bcdn_token=...) instead of query; use for HLS/DASH
+	CountriesAllowed []string  // ISO 3166-1 alpha-2
+	CountriesBlocked []string
+	IgnoreParams     bool      // query excluded from validation; original query dropped from the signed URL
+	SpeedLimit       int       // kB/s, 0 = none, negative is an error
+}
+type TUSUpload struct{ LibraryID, VideoID string; Expires time.Time; Signature string }
+func (t TUSUpload) Headers() map[string]string // AuthorizationSignature, AuthorizationExpire, VideoId, LibraryId
+```
+
+`SignURL` and `SignURLBasic` return an error (no panic) when: key empty; `Expires` zero; URL not absolute or invalid; invalid `IP`; a query parameter has several values (ambiguous signature); `SpeedLimit` negative; or `IgnoreParams` is combined with `CountriesAllowed`, `CountriesBlocked` or `SpeedLimit`. The last one returns `signing: IgnoreParams cannot be combined with countries or SpeedLimit`, because those values would otherwise be silently dropped.
+
+CDN URL:
+
+```go
+u, err := signing.SignURL("https://myzone.b-cdn.net/videos/stream1/playlist.m3u8", "token-auth-key", signing.Options{
+	Expires:          time.Now().Add(time.Hour),
+	Path:             "/videos/stream1/",
+	InPath:           true,
+	CountriesAllowed: []string{"GB", "ES"},
+})
+```
+
+Embed (the key is the library Token Authentication Key):
+
+```go
+embed := signing.EmbedURL("12345", "video-guid", "library-token-key", time.Now().Add(time.Hour))
+```
+
+TUS: create the video first (`CreateVideo`), sign on the server (the API key must not reach the browser), give the headers to a TUS client that uploads to `stream.TUSEndpoint`. The SDK does not perform TUS uploads.
+
+```go
+up := stream.New("12345", "library-api-key").SignTUS("video-guid", time.Now().Add(24*time.Hour))
+headers := up.Headers()
+```
+
+Webhook: verify the `X-BunnyStream-Signature` header against the exact raw body. Do not re-encode the JSON first.
+
+```go
+func webhook(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	if !signing.VerifyWebhook("read-only-api-key", body, r.Header.Get("X-BunnyStream-Signature")) {
+		http.Error(w, "invalid signature", http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+```
+
+## Common mistakes
+
+- Wrong storage region: the zone's primary region must match `WithRegion`. `WithEndpoint` overrides it.
+- Using the account API key for storage, or the library API key for embed tokens. See "Credentials".
+- Expecting retries on POST or on Stream `Upload`: they never retry.
+- Using the default HTTP client in production: no timeout. Pass `bunny.WithHTTPClient` and use context deadlines.
+- Treating `Exists` errors as "missing": only a not-found result is `(false, nil)`; other errors are returned.
+- Calling `Fetch` and waiting for a video ID: none is returned; find the video by title or collection.
+- Re-encoding the webhook JSON before `VerifyWebhook`: use the raw bytes.
+- Signing HLS/DASH playlists without `InPath: true` and a directory `Path`: segment URLs will not carry the token.
+- `IgnoreParams` with countries or `SpeedLimit`: returns an error.
+- Passing an `Expires` in the past or zero value: zero is an error, past tokens simply fail at the CDN.
+- Not closing the `io.ReadCloser` from `Download` or the `*http.Response` from `Raw`.
+- Upload without `Size` for non-bytes/strings readers: sent chunked.
+
+## Not covered
+
+- The rest of the bunny.net API: pull zones, DNS, billing, purge, Shield, Optimizer, statistics (use `bunny.Client.Do`).
+- Stream captions, chapters, moments, library settings.
+- A TUS client (only signing).
+- Pagination of Storage listings (the API returns the whole directory).
+- Third-party dependencies, code generation, a CLI: none.
+
+## Optional
+
+- [README](README.md): overview, install and quick starts
+- [CONTRIBUTING](CONTRIBUTING.md): `make check` must pass, conventional commits
+- [Official bunny.net docs](https://docs.bunny.net)

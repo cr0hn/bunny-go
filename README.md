@@ -1,5 +1,7 @@
 # bunny-go
 
+**If you are an LLM, read [llms.txt](llms.txt)**: a single-file reference with every package, function signature, option, error and pitfall, plus examples that compile.
+
 [![CI](https://github.com/cr0hn/bunny-go/actions/workflows/ci.yml/badge.svg)](https://github.com/cr0hn/bunny-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/cr0hn/bunny-go.svg)](https://pkg.go.dev/github.com/cr0hn/bunny-go)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -10,6 +12,7 @@ only the standard library.
 
 ## Contents
 
+- [For LLMs](llms.txt)
 - [Status](#status)
 - [Install](#install)
 - [Quick start](#quick-start)

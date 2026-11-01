@@ -34,9 +34,24 @@ if errors.As(err, &apiErr) { fmt.Println(apiErr.StatusCode, apiErr.Message) }
 
 | Service | Status |
 |---|---|
-| Edge Storage (upload, download, list, delete, per region) | coming soon |
+| Edge Storage (upload, download, list, stat, delete, per region) (`storage`) | available |
 | Stream (videos, collections, direct and TUS upload, embed tokens) | coming soon |
-| CDN URL signing (token authentication v1/v2) | coming soon |
+| CDN URL signing, Stream embed/TUS signatures, webhook verification (`signing`) | available |
+
+## Signing (`signing`, offline)
+
+```go
+u, err := signing.SignURL("https://myzone.b-cdn.net/videos/stream1/playlist.m3u8", key, signing.Options{
+	Expires: time.Now().Add(time.Hour), Path: "/videos/stream1/", InPath: true,
+	CountriesAllowed: []string{"GB"},
+})
+embed := signing.EmbedURL(libraryID, videoID, tokenKey, time.Now().Add(time.Hour))
+tus := signing.SignTUS(libraryID, apiKey, videoID, time.Now().Add(24*time.Hour)) // tus.Headers()
+ok := signing.VerifyWebhook(readOnlyKey, rawBody, r.Header.Get("X-BunnyStream-Signature"))
+```
+
+`SignURLBasic` covers the deprecated MD5 scheme. Outputs are tested against vectors from the official
+[BunnyCDN.TokenAuthentication](https://github.com/BunnyWay/BunnyCDN.TokenAuthentication) examples.
 
 ## Design
 

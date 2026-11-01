@@ -1,0 +1,48 @@
+{
+ "cdn_extra": [
+  {
+   "name": "query_existing",
+   "path": "/300kb.jpg?a=1&b=x%20y&c=",
+   "opts": {},
+   "signedUrl": "https://token-tester.b-cdn.net/300kb.jpg?token=HS256-L2INMC_7bxyhviFqZHk9w80wP4pAhTbwpA1oZ_P87aA&a=1&b=x%20y&c=&expires=1598024587"
+  },
+  {
+   "name": "query_directory",
+   "path": "/v/list.m3u8?quality=hd&name=a%2Bb%26c",
+   "opts": {
+    "is_directory": true
+   },
+   "signedUrl": "https://token-tester.b-cdn.net/bcdn_token=HS256-ImJpBzDoE6LQsUwuL-mhyyCEi1FBRbW9tebiqbHJL6E&name=a%2Bb%26c&quality=hd&expires=1598024587/v/list.m3u8"
+  },
+  {
+   "name": "query_ignored",
+   "path": "/300kb.jpg?a=1&b=2",
+   "opts": {
+    "ignore_params": true
+   },
+   "signedUrl": "https://token-tester.b-cdn.net/300kb.jpg?token=HS256-1lwWBD_c1IAGSj1UKPoxreu8ePDQ-Z9FoWLcRn_RRH0&token_ignore_params=true&expires=1598024587"
+  },
+  {
+   "name": "allowed_and_blocked_limit",
+   "path": "/300kb.jpg",
+   "opts": {
+    "countries_allowed": "ES,FR",
+    "countries_blocked": "RU",
+    "speed_limit": 250
+   },
+   "signedUrl": "https://token-tester.b-cdn.net/300kb.jpg?token=HS256-wRb4wUbLiOVqoaZy8EgzVsauArxTZVH4wlUvnBQLet4&limit=250&token_countries=ES%2CFR&token_countries_blocked=RU&expires=1598024587"
+  },
+  {
+   "name": "full_directory",
+   "path": "/videos/stream1/playlist.m3u8?lang=es",
+   "opts": {
+    "is_directory": true,
+    "path_allowed": "/videos/stream1/",
+    "user_ip": "2001:db8:85a3:1::8a2e:370:7334",
+    "countries_allowed": "GB",
+    "speed_limit": 500
+   },
+   "signedUrl": "https://token-tester.b-cdn.net/bcdn_token=HS256-1-efR0fxcoBpRuHWF8tT8px_taA28OUroL66kh2Waz4Os&lang=es&limit=500&token_countries=GB&token_path=%2Fvideos%2Fstream1%2F&expires=1598024587/videos/stream1/playlist.m3u8"
+  }
+ ]
+}

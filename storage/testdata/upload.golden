@@ -1,0 +1,9 @@
+PUT /zone/dir%20one/%C3%B1and%C3%BA%20%C3%BC.txt
+Accesskey: pw
+Checksum: ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB
+Content-Type: text/plain
+User-Agent: bunny-go/0.1.0
+Content-Length: 5
+Transfer-Encoding: []
+
+hello

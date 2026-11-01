@@ -99,6 +99,9 @@ type Request struct {
 	// GetBody returns a fresh copy of the body for each attempt; it enables
 	// retries for requests with a body.
 	GetBody func() (io.Reader, error)
+	// ContentLength is the body length in bytes when known and positive;
+	// otherwise the body is sent chunked unless Go can infer its length.
+	ContentLength int64
 }
 
 func (r *Request) idempotent() bool {
@@ -178,6 +181,9 @@ func (c *Client) once(ctx context.Context, r Request) (*http.Response, error) {
 	hr, err := http.NewRequestWithContext(ctx, r.Method, u, body)
 	if err != nil {
 		return nil, fmt.Errorf("bunny: building request: %w", err)
+	}
+	if r.ContentLength > 0 {
+		hr.ContentLength = r.ContentLength
 	}
 	for k, v := range r.Header {
 		hr.Header[k] = v

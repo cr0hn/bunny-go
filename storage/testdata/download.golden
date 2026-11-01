@@ -1,0 +1,7 @@
+GET /zone/a/b%20c.txt
+Accesskey: pw
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+

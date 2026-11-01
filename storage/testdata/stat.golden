@@ -1,0 +1,5 @@
+GET /zone/d/
+Accesskey: pw
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []

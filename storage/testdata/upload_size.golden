@@ -1,0 +1,7 @@
+PUT /zone/a.bin
+Accesskey: pw
+User-Agent: bunny-go/0.1.0
+Content-Length: 5
+Transfer-Encoding: []
+
+12345

@@ -1,0 +1,14 @@
+DELETE /zone/d/a%20b.txt
+Accesskey: pw
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+
+DELETE /zone/d/sub%20dir/
+Accesskey: pw
+User-Agent: bunny-go/0.1.0
+Content-Length: 0
+Transfer-Encoding: []
+
+

@@ -1,0 +1,42 @@
+version: "2"
+run:
+  go: "1.24"
+  tests: true
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - errorlint
+    - errname
+    - exhaustive
+    - gocritic
+    - gosec
+    - misspell
+    - noctx
+    - nolintlint
+    - perfsprint
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - godot
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, unparam]
+formatters:
+  enable:
+    - gofumpt
+    - goimports
